@@ -66,6 +66,7 @@ Dans le dossier de votre projet sur le VPS :
 ```bash
 # Créez le fichier de persistance de la base de données
 touch seen_transactions.json
+echo "{}" > seen_transactions.json
 ```
 
 ### 2. Démarrage
