@@ -78,7 +78,7 @@ docker compose up -d --build
 ### 3. Gestion
 * **Voir les logs en temps réel** : `docker compose logs -f`
 * **Arrêter le bot** : `docker compose down`
-* **Redémarrer le conteneur** : `docker compose restart`
+* **Redémarrer le conteneur** : `docker-compose restart finance-bot`
 
 ---
 
