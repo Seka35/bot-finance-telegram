@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  finance-bot:
+    build: .
+    container_name: finance_monitor_bot
+    restart: always
+    volumes:
+      # Monte le fichier .env pour pouvoir modifier la config sur le VPS sans re-build l'image
+      - ./.env:/app/.env
+      # Monte seen_transactions.json pour conserver l'historique des transactions lues et éviter les doublons au redémarrage
+      - ./seen_transactions.json:/app/seen_transactions.json
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"

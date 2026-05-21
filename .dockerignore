@@ -1,0 +1,25 @@
+# Ignorer les environnements virtuels
+venv/
+.venv/
+env/
+
+# Ignorer les secrets et configurations locales
+.env
+.env.exemple
+
+# Ignorer les dépôts Git et configurations d'éditeurs
+.git/
+.gitignore
+.idea/
+.vscode/
+
+# Ignorer les caches Python et fichiers de build
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+
+# Ignorer les données de test locales
+test.py
+access
