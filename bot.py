@@ -294,11 +294,24 @@ def fmt_transaction(t: dict, entity_name: str) -> str:
         email    = user_v5.get("email", "")
         date    = fmt_date(str(t.get("paid_at", "")))
         product = t.get("product_id", "—")
+
+        br = t.get("billing_reason", "")
+        if br == "subscription_cycle":
+            reason_str = " | 🔄 Renewal"
+        elif br == "subscription_create":
+            reason_str = " | 🆕 Subscription"
+        elif br == "one_time":
+            reason_str = " | 🛒 One-time"
+        elif br:
+            reason_str = f" | 🏷️ {br}"
+        else:
+            reason_str = ""
+
         user_line = f"👤 {name}"
         if email:
             user_line += f" | 📧 {email}"
         return (
-            f"{emoji} *{sign}{amount}*\n"
+            f"{emoji} *{sign}{amount}*{reason_str}\n"
             f"{user_line}\n"
             f"🔗 {source}\n"
             f"📅 {date} | `{status}`\n"
@@ -635,11 +648,23 @@ async def cmd_unpaid(update: Update, context: ContextTypes.DEFAULT_TYPE):
         pid       = p.get("id", "")
         fails     = p.get("payments_failed", 0)
         failure   = p.get("failure_message", "—")
+        br = p.get("billing_reason", "")
+        if br == "subscription_cycle":
+            reason_str = " | 🔄 Renewal"
+        elif br == "subscription_create":
+            reason_str = " | 🆕 Subscription"
+        elif br == "one_time":
+            reason_str = " | 🛒 One-time"
+        elif br:
+            reason_str = f" | 🏷️ {br}"
+        else:
+            reason_str = ""
+
         user_line = f"👤 {name}"
         if email:
             user_line += f" | 📧 {email}"
         msg = (
-            f"🚨 *Unpaid — ${amount:.2f}*\n"
+            f"🚨 *Unpaid — ${amount:.2f}*{reason_str}\n"
             f"{user_line}\n"
             f"🔁 Attempts: {fails}\n"
             f"⚡ {failure}\n"
@@ -674,11 +699,23 @@ async def cmd_failed(update: Update, context: ContextTypes.DEFAULT_TYPE):
         pid       = p.get("id", "")
         fails     = p.get("payments_failed", 0)
         failure   = p.get("failure_message", "—")
+        br = p.get("billing_reason", "")
+        if br == "subscription_cycle":
+            reason_str = " | 🔄 Renewal"
+        elif br == "subscription_create":
+            reason_str = " | 🆕 Subscription"
+        elif br == "one_time":
+            reason_str = " | 🛒 One-time"
+        elif br:
+            reason_str = f" | 🏷️ {br}"
+        else:
+            reason_str = ""
+
         user_line = f"👤 {name}"
         if email:
             user_line += f" | 📧 {email}"
         msg = (
-            f"❌ *Failed — ${amount:.2f}*\n"
+            f"❌ *Failed — ${amount:.2f}*{reason_str}\n"
             f"{user_line}\n"
             f"🔁 Attempts: {fails}\n"
             f"⚡ {failure}\n"
@@ -752,11 +789,23 @@ async def do_check(context: ContextTypes.DEFAULT_TYPE, chat_id: int = None) -> i
             pid       = p.get("id", "")
             fails     = p.get("payments_failed", 0)
             failure   = p.get("failure_message", "—")
+            br = p.get("billing_reason", "")
+            if br == "subscription_cycle":
+                reason_str = " | 🔄 Renewal"
+            elif br == "subscription_create":
+                reason_str = " | 🆕 Subscription"
+            elif br == "one_time":
+                reason_str = " | 🛒 One-time"
+            elif br:
+                reason_str = f" | 🏷️ {br}"
+            else:
+                reason_str = ""
+
             user_line = f"👤 {name}"
             if email:
                 user_line += f" | 📧 {email}"
             msg = (
-                f"❌ *Failed payment — ${amount:.2f}*\n"
+                f"❌ *Failed payment — ${amount:.2f}*{reason_str}\n"
                 f"{user_line}\n"
                 f"🔁 Attempts: {fails}\n"
                 f"⚡ {failure}\n"
