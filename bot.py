@@ -27,6 +27,15 @@ async def send_safe(bot, chat_id: int, text: str, parse_mode: str = "Markdown"):
                 wait = int(re.search(r"Retry in (\d+)", str(e)).group(1)) + 1
                 log.warning(f"Flood control — waiting {wait}s")
                 await asyncio.sleep(wait)
+            elif "Bad Request" in str(e) or "can't parse entities" in str(e):
+                log.error(f"Markdown error (sending as plain text): {e}\nText was: {text}")
+                try:
+                    # Fallback to plain text if Markdown parsing fails
+                    await bot.send_message(chat_id=chat_id, text=text, parse_mode=None)
+                    return
+                except Exception as e2:
+                    log.error(f"Fallback send failed: {e2}")
+                    return
             else:
                 raise
 
@@ -41,7 +50,6 @@ SEEN_FILE = "seen_transactions.json"
 
 SLASH_ENTITIES = [
     (os.getenv("SLASH_LEGAL_ENTITY_1"), "WCATFM LLC"),
-    (os.getenv("SLASH_LEGAL_ENTITY_2"), "DG SOLUTION LLC"),
 ]
 
 WHOP_API_KEY    = os.getenv("WHOP_API_KEY")
@@ -65,6 +73,14 @@ def authorized_only(func):
         return await func(update, context)
     return wrapper
 
+def esc(text: str) -> str:
+    """Escape Markdown special characters."""
+    if not text:
+        return ""
+    # Characters to escape in Markdown (v1): _ * [ `
+    # Note: ] is also sometimes needed.
+    return str(text).replace("_", "\\_").replace("*", "\\*").replace("[", "\\[").replace("`", "\\`")
+
 # ─── LOGGING ──────────────────────────────────────────────────────────────────
 
 logging.basicConfig(
@@ -77,16 +93,28 @@ log = logging.getLogger(__name__)
 
 def load_seen() -> set:
     if os.path.exists(SEEN_FILE):
-        with open(SEEN_FILE, "r") as f:
-            data = json.load(f)
-            return set(data.get("tx_ids", []))
+        try:
+            with open(SEEN_FILE, "r") as f:
+                content = f.read().strip()
+                if not content:
+                    return set()
+                data = json.loads(content)
+                return set(data.get("tx_ids", []))
+        except (json.JSONDecodeError, Exception) as e:
+            log.error(f"Error loading {SEEN_FILE}: {e}")
+            return set()
     return set()
 
 def save_seen(seen: set):
     data = {}
     if os.path.exists(SEEN_FILE):
-        with open(SEEN_FILE, "r") as f:
-            data = json.load(f)
+        try:
+            with open(SEEN_FILE, "r") as f:
+                content = f.read().strip()
+                if content:
+                    data = json.loads(content)
+        except:
+            pass
     data["tx_ids"] = list(seen)
     data["updated_at"] = datetime.now().isoformat()
     with open(SEEN_FILE, "w") as f:
@@ -94,16 +122,28 @@ def save_seen(seen: set):
 
 def load_seen_key(key: str) -> set:
     if os.path.exists(SEEN_FILE):
-        with open(SEEN_FILE, "r") as f:
-            data = json.load(f)
-            return set(data.get(key, []))
+        try:
+            with open(SEEN_FILE, "r") as f:
+                content = f.read().strip()
+                if not content:
+                    return set()
+                data = json.loads(content)
+                return set(data.get(key, []))
+        except (json.JSONDecodeError, Exception) as e:
+            log.error(f"Error loading key {key} from {SEEN_FILE}: {e}")
+            return set()
     return set()
 
 def save_seen_key(key: str, seen: set):
     data = {}
     if os.path.exists(SEEN_FILE):
-        with open(SEEN_FILE, "r") as f:
-            data = json.load(f)
+        try:
+            with open(SEEN_FILE, "r") as f:
+                content = f.read().strip()
+                if content:
+                    data = json.loads(content)
+        except:
+            pass
     data[key] = list(seen)
     data["updated_at"] = datetime.now().isoformat()
     with open(SEEN_FILE, "w") as f:
@@ -281,6 +321,9 @@ def fmt_transaction(t: dict, entity_name: str) -> str:
     sign   = "+" if cents > 0 else "-"
     amount = fmt_amount(cents)
     status = t.get("status", "")
+    if status.lower() == "pending":
+        status = "pending (Auth only, not settled)"
+    
     source = source_tag(entity_name)
     tx_id  = t.get("id", "")
     id_str = f"`{tx_id}`" if tx_id else ""
@@ -293,28 +336,32 @@ def fmt_transaction(t: dict, entity_name: str) -> str:
         name     = embedded.get("name") or embedded.get("username") or "—"
         email    = user_v5.get("email", "")
         date    = fmt_date(str(t.get("paid_at", "")))
-        product = t.get("product_id", "—")
+        
+        # Get product name if available
+        product_obj = t.get("product") or {}
+        product = product_obj.get("name") or t.get("product_id", "—")
 
-        br = t.get("billing_reason", "")
-        if br == "subscription_cycle":
-            reason_str = " | 🔄 Renewal"
-        elif br == "subscription_create":
-            reason_str = " | 🆕 Subscription"
-        elif br == "one_time":
-            reason_str = " | 🛒 One-time"
-        elif br:
-            reason_str = f" | 🏷️ {br}"
+        # Type de paiement
+        reason = t.get("billing_reason", "")
+        if reason == "subscription_create":
+            type_str = "Creation 🆕"
+        elif reason == "subscription_cycle":
+            type_str = "Renewal 🔁"
+        elif reason == "one_time":
+            type_str = "One-time 💰"
         else:
-            reason_str = ""
-
-        user_line = f"👤 {name}"
+            type_str = reason.replace("_", " ").title() if reason else "—"
+        
+        user_line = f"👤 {esc(name)}"
         if email:
-            user_line += f" | 📧 {email}"
+            user_line += f" | 📧 {esc(email)}"
         return (
-            f"{emoji} *{sign}{amount}*{reason_str}\n"
+            f"{emoji} *{sign}{amount}*\n"
             f"{user_line}\n"
+            f"📦 Product: *{esc(product)}*\n"
+            f"🎫 Type: *{esc(type_str)}*\n"
             f"🔗 {source}\n"
-            f"📅 {date} | `{status}`\n"
+            f"📅 {date} | `{esc(status)}`\n"
             f"🆔 {id_str}"
         )
     else:
@@ -322,9 +369,9 @@ def fmt_transaction(t: dict, entity_name: str) -> str:
         date = fmt_date(t.get("date", ""))
         return (
             f"{emoji} *{sign}{amount}*\n"
-            f"📋 {desc}\n"
+            f"📋 {esc(desc)}\n"
             f"🔗 {source}\n"
-            f"📅 {date} | `{status}`\n"
+            f"📅 {date} | `{esc(status)}`\n"
             f"🆔 {id_str}"
         )
 
@@ -380,7 +427,6 @@ async def cmd_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "━━━━━━━━━━━━━━━━━━━━━━\n"
         "🏦 *Sources monitored*\n"
         "• Slash — WCATFM LLC\n"
-        "• Slash — DG SOLUTION LLC\n"
         "• Whop\n"
     )
     await send_safe(context.bot, update.effective_chat.id, msg)
@@ -648,23 +694,11 @@ async def cmd_unpaid(update: Update, context: ContextTypes.DEFAULT_TYPE):
         pid       = p.get("id", "")
         fails     = p.get("payments_failed", 0)
         failure   = p.get("failure_message", "—")
-        br = p.get("billing_reason", "")
-        if br == "subscription_cycle":
-            reason_str = " | 🔄 Renewal"
-        elif br == "subscription_create":
-            reason_str = " | 🆕 Subscription"
-        elif br == "one_time":
-            reason_str = " | 🛒 One-time"
-        elif br:
-            reason_str = f" | 🏷️ {br}"
-        else:
-            reason_str = ""
-
         user_line = f"👤 {name}"
         if email:
             user_line += f" | 📧 {email}"
         msg = (
-            f"🚨 *Unpaid — ${amount:.2f}*{reason_str}\n"
+            f"🚨 *Unpaid — ${amount:.2f}*\n"
             f"{user_line}\n"
             f"🔁 Attempts: {fails}\n"
             f"⚡ {failure}\n"
@@ -699,23 +733,11 @@ async def cmd_failed(update: Update, context: ContextTypes.DEFAULT_TYPE):
         pid       = p.get("id", "")
         fails     = p.get("payments_failed", 0)
         failure   = p.get("failure_message", "—")
-        br = p.get("billing_reason", "")
-        if br == "subscription_cycle":
-            reason_str = " | 🔄 Renewal"
-        elif br == "subscription_create":
-            reason_str = " | 🆕 Subscription"
-        elif br == "one_time":
-            reason_str = " | 🛒 One-time"
-        elif br:
-            reason_str = f" | 🏷️ {br}"
-        else:
-            reason_str = ""
-
         user_line = f"👤 {name}"
         if email:
             user_line += f" | 📧 {email}"
         msg = (
-            f"❌ *Failed — ${amount:.2f}*{reason_str}\n"
+            f"❌ *Failed — ${amount:.2f}*\n"
             f"{user_line}\n"
             f"🔁 Attempts: {fails}\n"
             f"⚡ {failure}\n"
@@ -789,26 +811,14 @@ async def do_check(context: ContextTypes.DEFAULT_TYPE, chat_id: int = None) -> i
             pid       = p.get("id", "")
             fails     = p.get("payments_failed", 0)
             failure   = p.get("failure_message", "—")
-            br = p.get("billing_reason", "")
-            if br == "subscription_cycle":
-                reason_str = " | 🔄 Renewal"
-            elif br == "subscription_create":
-                reason_str = " | 🆕 Subscription"
-            elif br == "one_time":
-                reason_str = " | 🛒 One-time"
-            elif br:
-                reason_str = f" | 🏷️ {br}"
-            else:
-                reason_str = ""
-
-            user_line = f"👤 {name}"
+            user_line = f"👤 {esc(name)}"
             if email:
-                user_line += f" | 📧 {email}"
+                user_line += f" | 📧 {esc(email)}"
             msg = (
-                f"❌ *Failed payment — ${amount:.2f}*{reason_str}\n"
+                f"❌ *Failed payment — ${amount:.2f}*\n"
                 f"{user_line}\n"
                 f"🔁 Attempts: {fails}\n"
-                f"⚡ {failure}\n"
+                f"⚡ {esc(failure)}\n"
                 f"🆔 `{pid}`"
             )
             await send_safe(context.bot, target_chat, msg)

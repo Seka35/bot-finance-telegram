@@ -6,7 +6,7 @@ Un bot Telegram intelligent écrit en Python pour monitorer vos comptes **Slash 
 
 ## ✨ Fonctionnalités
 
-* 🏦 **Intégration Slash Bank** : Récupération des transactions et des soldes multi-entités (`WCATFM LLC`, `DG SOLUTION LLC`).
+* 🏦 **Intégration Slash Bank** : Récupération des transactions et des soldes de l'entité `WCATFM LLC`.
 * 🛍️ **Intégration Whop** : Suivi des ventes en temps réel, alertes de paiements échoués et détection des clients en situation d'impayé.
 * ⏱️ **Polling Automatique** : Vérification planifiée toutes les heures (personnalisable) avec déduplication stricte grâce à `seen_transactions.json`.
 * 🔒 **Sécurisé** : Accès limité exclusivement au groupe Telegram autorisé via le `TELEGRAM_CHAT_ID`.
